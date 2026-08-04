@@ -8,8 +8,35 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10kb' })); // Limita o tamanho do JSON recebido para evitar DoS
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Cabeçalhos de Segurança HTTP (Security Headers)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Funções de Criptografia Segura de Senha (Scrypt + Salt com Timing-Safe Check)
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  if (!stored.includes(':')) {
+    // Compatibilidade com senhas antigas registradas antes da criptografia
+    return password === stored;
+  }
+  const [salt, originalHash] = stored.split(':');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(originalHash, 'hex'));
+}
 
 // Conexão com o banco de dados SQLite
 const dbDir = path.join(__dirname, 'database');
@@ -76,12 +103,16 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+    if (!email || !password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'E-mail e uma senha de no mínimo 6 caracteres são obrigatórios.' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const finalName = (name && name.trim()) ? name.trim() : cleanEmail.split('@')[0];
+    if (!cleanEmail.includes('@') || cleanEmail.length > 100) {
+      return res.status(400).json({ error: 'E-mail inválido.' });
+    }
+
+    const finalName = (name && typeof name === 'string' && name.trim()) ? name.trim().slice(0, 50) : cleanEmail.split('@')[0];
 
     const existingUser = await dbGet('SELECT id FROM users WHERE email = ?', [cleanEmail]);
     if (existingUser) {
@@ -89,9 +120,11 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const id = crypto.randomUUID();
+    const hashedPassword = hashPassword(password);
+
     await dbRun(
       'INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)',
-      [id, finalName, cleanEmail, password]
+      [id, finalName, cleanEmail, hashedPassword]
     );
 
     res.status(201).json({ id, name: finalName, email: cleanEmail });
@@ -112,7 +145,7 @@ app.post('/api/auth/login', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const user = await dbGet('SELECT id, name, email, password FROM users WHERE email = ?', [cleanEmail]);
 
-    if (!user || user.password !== password) {
+    if (!user || !verifyPassword(password, user.password)) {
       return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
     }
 

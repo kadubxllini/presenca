@@ -197,7 +197,45 @@ function subjectModal(s) {
 
 function renderCalendar() {
   const calendar = $('#weekCalendar');
+  if (!calendar) return;
   calendar.innerHTML = '';
+
+  // 1. Coleta todas as aulas de todos os dias
+  const allScheduledItems = [];
+  subjects.forEach(subject => {
+    (subject.days || []).forEach(item => {
+      const dayId = +item.day;
+      const slots = item.slots && item.slots.length
+        ? item.slots
+        : (item.start ? [{ start: item.start, end: item.end }] : []);
+
+      slots.forEach(slot => {
+        allScheduledItems.push({
+          dayId,
+          subject,
+          start: slot.start || '18:30',
+          end: slot.end || '20:30'
+        });
+      });
+    });
+  });
+
+  // 2. Mapeia e ordena todos os horários únicos (slots) da semana
+  const uniqueSlotsMap = new Map();
+  allScheduledItems.forEach(item => {
+    const key = `${item.start}-${item.end}`;
+    if (!uniqueSlotsMap.has(key)) {
+      uniqueSlotsMap.set(key, { start: item.start, end: item.end, key });
+    }
+  });
+
+  const sortedTimeSlots = Array.from(uniqueSlotsMap.values()).sort((a, b) => {
+    const startCmp = a.start.localeCompare(b.start);
+    if (startCmp !== 0) return startCmp;
+    return a.end.localeCompare(b.end);
+  });
+
+  // 3. Renderiza cada dia alinhando os horários em linhas correspondentes
   daysOfWeek.forEach(day => {
     const column = document.createElement('article');
     column.className = 'calendar-day';
@@ -205,24 +243,7 @@ function renderCalendar() {
     title.textContent = day.name;
     column.append(title);
 
-    const dayItems = [];
-
-    subjects.forEach(subject => {
-      const daySchedule = subject.days?.find(item => +item.day === day.id);
-      if (!daySchedule) return;
-
-      const slots = daySchedule.slots && daySchedule.slots.length
-        ? daySchedule.slots
-        : (daySchedule.start ? [{ start: daySchedule.start, end: daySchedule.end }] : []);
-
-      slots.forEach(slot => {
-        dayItems.push({
-          subject,
-          start: slot.start || '18:30',
-          end: slot.end || '20:30'
-        });
-      });
-    });
+    const dayItems = allScheduledItems.filter(x => x.dayId === day.id);
 
     if (!dayItems.length) {
       const empty = document.createElement('p');
@@ -230,17 +251,22 @@ function renderCalendar() {
       empty.textContent = 'Sem aulas';
       column.append(empty);
     } else {
-      // Ordena por horário de início
-      dayItems.sort((a, b) => a.start.localeCompare(b.start));
-
-      dayItems.forEach(itemData => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'calendar-item';
-        item.style.borderLeftColor = itemData.subject.color;
-        item.textContent = `${itemData.subject.name} (${itemData.start} - ${itemData.end})`;
-        item.onclick = () => document.getElementById(`subject-${itemData.subject.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        column.append(item);
+      sortedTimeSlots.forEach(slot => {
+        const matchingItem = dayItems.find(item => item.start === slot.start && item.end === slot.end);
+        if (matchingItem) {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'calendar-item';
+          item.style.borderLeftColor = matchingItem.subject.color;
+          item.textContent = `${matchingItem.subject.name} (${matchingItem.start} - ${matchingItem.end})`;
+          item.onclick = () => document.getElementById(`subject-${matchingItem.subject.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          column.append(item);
+        } else {
+          // Espaço reservado para alinhar com outras matérias do mesmo horário em outros dias
+          const placeholder = document.createElement('div');
+          placeholder.className = 'calendar-item-placeholder';
+          column.append(placeholder);
+        }
       });
     }
 
@@ -312,8 +338,24 @@ function render() {
     }).join(' · ')}  •  ${t.total}h de carga horária`;
     c.querySelector('.absence-ratio').textContent = `${hours(t.absent)} de ${hours(t.allowed)}`;
     const bar = c.querySelector('.progress-bar');
+    const color = `hsl(${Math.max(0, 145 - p * 1.45)} 68% 47%)`;
     bar.style.width = `${p}%`;
-    bar.style.background = `hsl(${Math.max(0, 145 - p * 1.45)} 68% 47%)`;
+    bar.style.background = color;
+
+    // Atualiza o gráfico de pizza (donut SVG)
+    const pieFill = c.querySelector('.pie-fill');
+    const pieText = c.querySelector('.pie-text');
+    const circumference = 106.81;
+    const offset = circumference - (circumference * (p / 100));
+    if (pieFill) {
+      pieFill.style.strokeDashoffset = offset;
+      pieFill.style.stroke = color;
+    }
+    if (pieText) {
+      pieText.textContent = `${Math.round(p)}%`;
+      pieText.style.color = p >= 100 ? 'var(--danger)' : 'var(--ink)';
+    }
+
     c.querySelector('.remaining-text').textContent = t.absent >= t.allowed ? 'Limite de faltas atingido.' : `Você ainda pode faltar ${hours(t.allowed - t.absent)}.`;
     c.querySelector('.add-absence').textContent = '+ Registrar 1h de falta';
     c.querySelector('.remove-absence').textContent = '− Remover 1h';
@@ -385,6 +427,15 @@ $('#tabSignup').onclick = () => {
 
 $('#userModal')?.addEventListener('cancel', e => {
   if (!user) e.preventDefault();
+});
+
+document.querySelectorAll('dialog').forEach(dialog => {
+  dialog.addEventListener('click', e => {
+    if (e.target === dialog) {
+      if (dialog.id === 'userModal' && !user) return;
+      dialog.close();
+    }
+  });
 });
 
 document.querySelectorAll('[data-close]').forEach(x => x.onclick = () => $('#' + x.dataset.close).close());
