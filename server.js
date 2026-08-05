@@ -184,9 +184,12 @@ app.post('/api/subjects', async (req, res) => {
       return res.status(400).json({ error: 'Dados incompletos para a matéria.' });
     }
 
-    const daysStr = JSON.stringify(days);
+    const daysStr = typeof days === 'string' ? days : JSON.stringify(days);
 
-    if (id) {
+    // Checa se a matéria já existe no banco
+    const existing = id ? await dbGet('SELECT * FROM subjects WHERE id = ?', [id]) : null;
+
+    if (existing) {
       // Atualizar existente
       await dbRun(
         `UPDATE subjects 
@@ -195,17 +198,17 @@ app.post('/api/subjects', async (req, res) => {
         [name, color || '#6d5dfc', absence_limit || 25, total_hours || 60, daysStr, id, user_id]
       );
       const updated = await dbGet('SELECT * FROM subjects WHERE id = ?', [id]);
-      return res.json({ ...updated, days: JSON.parse(updated.days) });
+      return res.json({ ...updated, days: JSON.parse(updated.days || '[]') });
     } else {
       // Criar nova
-      const newId = crypto.randomUUID();
+      const newId = id || crypto.randomUUID();
       await dbRun(
         `INSERT INTO subjects (id, user_id, name, color, absence_limit, total_hours, days, absence_count)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [newId, user_id, name, color || '#6d5dfc', absence_limit || 25, total_hours || 60, daysStr, absence_count || 0]
       );
       const created = await dbGet('SELECT * FROM subjects WHERE id = ?', [newId]);
-      return res.status(201).json({ ...created, days: JSON.parse(created.days) });
+      return res.status(201).json({ ...created, days: JSON.parse(created.days || '[]') });
     }
   } catch (err) {
     console.error('Erro ao salvar matéria:', err);
@@ -217,11 +220,15 @@ app.post('/api/subjects', async (req, res) => {
 app.patch('/api/subjects/:id/absence', async (req, res) => {
   try {
     const { id } = req.params;
-    const { absence_count } = req.body;
+    const { absence_count, user_id } = req.body;
 
-    await dbRun('UPDATE subjects SET absence_count = ? WHERE id = ?', [absence_count, id]);
+    if (user_id) {
+      await dbRun('UPDATE subjects SET absence_count = ? WHERE id = ? AND user_id = ?', [absence_count, id, user_id]);
+    } else {
+      await dbRun('UPDATE subjects SET absence_count = ? WHERE id = ?', [absence_count, id]);
+    }
     const updated = await dbGet('SELECT * FROM subjects WHERE id = ?', [id]);
-    res.json({ ...updated, days: JSON.parse(updated.days) });
+    res.json(updated ? { ...updated, days: JSON.parse(updated.days || '[]') } : { success: true });
   } catch (err) {
     console.error('Erro ao atualizar faltas:', err);
     res.status(500).json({ error: 'Erro ao atualizar faltas.' });
@@ -232,7 +239,13 @@ app.patch('/api/subjects/:id/absence', async (req, res) => {
 app.delete('/api/subjects/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await dbRun('DELETE FROM subjects WHERE id = ?', [id]);
+    const user_id = req.query.user_id || req.body?.user_id;
+
+    if (user_id) {
+      await dbRun('DELETE FROM subjects WHERE id = ? AND user_id = ?', [id, user_id]);
+    } else {
+      await dbRun('DELETE FROM subjects WHERE id = ?', [id]);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao excluir matéria:', err);

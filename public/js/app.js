@@ -427,7 +427,7 @@ async function change(s, n) {
     await fetch(`/api/subjects/${s.id}/absence`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ absence_count: v })
+      body: JSON.stringify({ absence_count: v, user_id: user?.id })
     });
   } catch (err) {
     console.warn('[PWA] Falha ao sincronizar falta com o servidor, salva localmente.');
@@ -437,11 +437,11 @@ async function change(s, n) {
 async function remove(s) {
   if (!confirm(`Excluir a matéria "${s.name}"?`)) return;
   subjects = subjects.filter(x => x.id !== s.id);
-  saveLocalSubjects(user.id, subjects);
+  saveLocalSubjects(user?.id, subjects);
   render();
 
   try {
-    await fetch(`/api/subjects/${s.id}`, { method: 'DELETE' });
+    await fetch(`/api/subjects/${s.id}?user_id=${user?.id}`, { method: 'DELETE' });
   } catch (err) {
     console.warn('[PWA] Falha ao excluir matéria no servidor, excluída localmente.');
   }
@@ -550,10 +550,9 @@ $('#subjectForm').onsubmit = async e => {
   });
   if (!days.length) return alert('Escolha pelo menos um dia.');
 
-  const id = e.currentTarget.dataset.id;
-  const targetId = id || `sub_${Date.now()}`;
+  const id = e.currentTarget.dataset.id || undefined;
   const payload = {
-    id: targetId,
+    id,
     user_id: user.id,
     name: $('#subjectName').value.trim(),
     color: $('#subjectColor').value,
@@ -563,25 +562,35 @@ $('#subjectForm').onsubmit = async e => {
     absence_count: id ? (subjects.find(s => s.id === id)?.absence_count || 0) : 0
   };
 
-  // Atualiza estado local imediatamente
-  if (id) {
-    subjects = subjects.map(s => s.id === id ? payload : s);
-  } else {
-    subjects.push(payload);
-  }
-  saveLocalSubjects(user.id, subjects);
-  $('#subjectModal').close();
-  render();
-
-  // Tenta sincronizar com o servidor em background
   try {
-    await fetch('/api/subjects', {
+    const res = await fetch('/api/subjects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    if (!res.ok) throw new Error('Erro ao salvar no servidor');
+    const savedSubject = await res.json();
+
+    if (id) {
+      subjects = subjects.map(s => s.id === id ? savedSubject : s);
+    } else {
+      subjects.push(savedSubject);
+    }
+    saveLocalSubjects(user.id, subjects);
+    $('#subjectModal').close();
+    render();
   } catch (err) {
-    console.warn('[PWA] Matéria salva localmente (offline/servidor em repouso).');
+    console.warn('[PWA] Servidor offline. Salvando localmente:', err);
+    const tempSubject = { ...payload, id: id || `sub_${Date.now()}` };
+    if (id) {
+      subjects = subjects.map(s => s.id === id ? tempSubject : s);
+    } else {
+      subjects.push(tempSubject);
+    }
+    saveLocalSubjects(user.id, subjects);
+    $('#subjectModal').close();
+    render();
   }
 };
 
