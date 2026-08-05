@@ -255,7 +255,12 @@ app.delete('/api/subjects/:id', async (req, res) => {
   }
 });
 
-const HOST = process.env.HOST || '0.0.0.0';
-app.listen(PORT, HOST, () => {
-  console.log(`Servidor rodando com SQLite na porta ${PORT} (http://${HOST}:${PORT})`);
-});
+if (process.env.IP) {
+  app.listen(PORT, process.env.IP, () => {
+    console.log(`Servidor rodando no Alwaysdata em ${process.env.IP}:${PORT}`);
+  });
+} else {
+  app.listen(PORT, () => {
+    console.log(`Servidor rodando com SQLite na porta ${PORT} (http://localhost:${PORT})`);
+  });
+}
