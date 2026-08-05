@@ -39,17 +39,19 @@ function verifyPassword(password, stored) {
 }
 
 // Conexão com o banco de dados SQLite
-const dbDir = path.join(__dirname, 'database');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'database', 'banco.db');
+const dbDir = path.dirname(dbPath);
+
 const fs = require('fs');
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
-const dbPath = path.join(dbDir, 'banco.db');
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Erro ao abrir o banco de dados SQLite:', err.message);
   } else {
-    console.log('Conectado ao banco de dados SQLite (database/banco.db)');
+    console.log(`Conectado ao banco de dados SQLite em: ${dbPath}`);
   }
 });
 
@@ -253,6 +255,7 @@ app.delete('/api/subjects/:id', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando com SQLite na porta ${PORT} (http://localhost:${PORT})`);
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`Servidor rodando com SQLite na porta ${PORT} (http://${HOST}:${PORT})`);
 });
