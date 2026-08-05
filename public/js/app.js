@@ -367,45 +367,83 @@ function render() {
   $('#emptyState').hidden = !!subjects.length;
 }
 
+// Funções de Persistência Local (Fallback para Render & Offline)
+function saveLocalUser(u) {
+  try {
+    localStorage.setItem('presenca_session', JSON.stringify(u));
+  } catch (e) {
+    console.error('Erro ao salvar usuário no localStorage:', e);
+  }
+}
+
+function saveLocalSubjects(userId, list) {
+  try {
+    if (userId) {
+      localStorage.setItem(`presenca_subjects_${userId}`, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.error('Erro ao salvar matérias no localStorage:', e);
+  }
+}
+
+function getLocalSubjects(userId) {
+  try {
+    if (!userId) return [];
+    const saved = localStorage.getItem(`presenca_subjects_${userId}`);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function load() {
   if (!user) return;
   profile = { name: user.name, id: user.id };
+  
+  // Tenta buscar matérias no servidor
   try {
     const res = await fetch(`/api/subjects/${user.id}`);
-    if (!res.ok) throw new Error('Erro ao buscar dados');
-    subjects = await res.json();
+    if (res.ok) {
+      subjects = await res.json();
+      saveLocalSubjects(user.id, subjects);
+    } else {
+      // Se o servidor no Render reiniciar ou resetar, carrega o backup local
+      subjects = getLocalSubjects(user.id);
+    }
   } catch (err) {
-    console.error(err);
-    alert('Erro ao carregar dados do servidor SQLite.');
+    console.warn('[PWA] Servidor offline ou indisponível. Carregando dados locais:', err);
+    subjects = getLocalSubjects(user.id);
   }
   render();
 }
 
 async function change(s, n) {
   const v = Math.max(0, +s.absence_count + n);
+  s.absence_count = v;
+  saveLocalSubjects(user.id, subjects);
+  render();
+
   try {
-    const res = await fetch(`/api/subjects/${s.id}/absence`, {
+    await fetch(`/api/subjects/${s.id}/absence`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ absence_count: v })
     });
-    if (!res.ok) throw new Error('Erro ao salvar faltas');
-    s.absence_count = v;
-    render();
   } catch (err) {
-    alert('Não foi possível salvar o número de faltas.');
+    console.warn('[PWA] Falha ao sincronizar falta com o servidor, salva localmente.');
   }
 }
 
 async function remove(s) {
   if (!confirm(`Excluir a matéria "${s.name}"?`)) return;
+  subjects = subjects.filter(x => x.id !== s.id);
+  saveLocalSubjects(user.id, subjects);
+  render();
+
   try {
-    const res = await fetch(`/api/subjects/${s.id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Erro ao excluir');
-    subjects = subjects.filter(x => x.id !== s.id);
-    render();
+    await fetch(`/api/subjects/${s.id}`, { method: 'DELETE' });
   } catch (err) {
-    alert('Não foi possível excluir a matéria.');
+    console.warn('[PWA] Falha ao excluir matéria no servidor, excluída localmente.');
   }
 }
 
@@ -441,6 +479,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
 document.querySelectorAll('[data-close]').forEach(x => x.onclick = () => $('#' + x.dataset.close).close());
 
 $('#switchUserButton').onclick = () => {
+  localStorage.removeItem('presenca_session');
   sessionStorage.removeItem('presenca_session');
   user = null;
   profile = null;
@@ -476,12 +515,16 @@ $('#userForm').onsubmit = async e => {
     }
 
     user = data;
-    sessionStorage.setItem('presenca_session', JSON.stringify(user));
+    saveLocalUser(user);
     message('');
     load();
   } catch (err) {
     $('#authSubmit').disabled = false;
-    message('Erro ao conectar com o servidor.');
+    // Fallback: se o servidor estiver inacessível ou reiniciando no Render
+    user = { id: `local_${Date.now()}`, name: payload.name || email.split('@')[0], email };
+    saveLocalUser(user);
+    message('');
+    load();
   }
 };
 
@@ -508,8 +551,9 @@ $('#subjectForm').onsubmit = async e => {
   if (!days.length) return alert('Escolha pelo menos um dia.');
 
   const id = e.currentTarget.dataset.id;
+  const targetId = id || `sub_${Date.now()}`;
   const payload = {
-    id: id || undefined,
+    id: targetId,
     user_id: user.id,
     name: $('#subjectName').value.trim(),
     color: $('#subjectColor').value,
@@ -519,33 +563,32 @@ $('#subjectForm').onsubmit = async e => {
     absence_count: id ? (subjects.find(s => s.id === id)?.absence_count || 0) : 0
   };
 
+  // Atualiza estado local imediatamente
+  if (id) {
+    subjects = subjects.map(s => s.id === id ? payload : s);
+  } else {
+    subjects.push(payload);
+  }
+  saveLocalSubjects(user.id, subjects);
+  $('#subjectModal').close();
+  render();
+
+  // Tenta sincronizar com o servidor em background
   try {
-    const res = await fetch('/api/subjects', {
+    await fetch('/api/subjects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-
-    if (!res.ok) throw new Error('Erro ao salvar matéria');
-    const savedSubject = await res.json();
-
-    if (id) {
-      subjects = subjects.map(s => s.id === id ? savedSubject : s);
-    } else {
-      subjects.push(savedSubject);
-    }
-
-    $('#subjectModal').close();
-    render();
   } catch (err) {
-    alert('Não foi possível salvar a matéria.');
+    console.warn('[PWA] Matéria salva localmente (offline/servidor em repouso).');
   }
 };
 
-// Carrega sessão ativa se existir no sessionStorage
+// Carrega sessão ativa se existir no localStorage
 (() => {
   try {
-    const saved = sessionStorage.getItem('presenca_session');
+    const saved = localStorage.getItem('presenca_session') || sessionStorage.getItem('presenca_session');
     if (saved) {
       user = JSON.parse(saved);
       load();

@@ -55,6 +55,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Inicialização das tabelas
 db.serialize(() => {
+  db.run('PRAGMA journal_mode = WAL;');
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
