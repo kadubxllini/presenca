@@ -1,0 +1,38 @@
+{
+  "name": "Presença - Controle de Faltas",
+  "short_name": "Presença",
+  "description": "Acompanhamento e controle inteligente de presença e faltas em disciplinas acadêmicas.",
+  "id": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fcfbff",
+  "theme_color": "#6d5dfc",
+  "orientation": "portrait-primary",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

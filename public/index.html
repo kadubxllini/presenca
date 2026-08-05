@@ -5,6 +5,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Presença | Controle de faltas</title>
+  
+  <!-- PWA Meta Tags & Icons -->
+  <meta name="theme-color" content="#6d5dfc" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Presença" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -28,6 +40,7 @@
           </div>
         </div>
         <div class="topbar-actions">
+          <button class="button secondary" id="installPwaBtn" hidden title="Instalar aplicativo Presença">📲 Instalar App</button>
           <div class="profile-card" id="profileCard"></div>
           <button class="button primary" id="openSubjectModal">+ Nova matéria</button>
           <button class="user-switch" id="switchUserButton" title="Sair da conta">↪ Sair</button>

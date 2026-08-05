@@ -556,3 +556,40 @@ $('#subjectForm').onsubmit = async e => {
     render();
   }
 })();
+
+// Registra o Service Worker para suporte a PWA Offline e Instalação
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[PWA] Service Worker registrado com sucesso:', reg.scope))
+      .catch(err => console.error('[PWA] Falha ao registrar Service Worker:', err));
+  });
+}
+
+// Lógica para capturar e exibir o prompt de instalação do PWA
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const installBtn = $('#installPwaBtn');
+  if (installBtn) {
+    installBtn.hidden = false;
+    installBtn.onclick = async () => {
+      installBtn.hidden = true;
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('[PWA] Resultado da instalação:', outcome);
+        deferredPrompt = null;
+      }
+    };
+  }
+});
+
+window.addEventListener('appinstalled', () => {
+  console.log('[PWA] Aplicativo Presença instalado com sucesso!');
+  const installBtn = $('#installPwaBtn');
+  if (installBtn) installBtn.hidden = true;
+  deferredPrompt = null;
+});
+
