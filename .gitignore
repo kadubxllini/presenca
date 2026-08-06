@@ -13,7 +13,7 @@ yarn-error.log*
 .env.production
 .env.development
 
-# Banco de dados local SQLite (não rastreado pelo Git)
+# Banco de dados local SQLite
 database/*.db*
 database/*.sqlite*
 *.db*
