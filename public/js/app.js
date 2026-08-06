@@ -351,8 +351,9 @@ function render() {
       pieFill.style.strokeDashoffset = offset;
       pieFill.style.stroke = color;
     }
+    const currentAbsencePct = t.total > 0 ? (t.absent / t.total) * 100 : 0;
     if (pieText) {
-      pieText.textContent = `${Math.round(p)}%`;
+      pieText.textContent = `${Math.round(currentAbsencePct)}%`;
       pieText.style.color = p >= 100 ? 'var(--danger)' : 'var(--ink)';
     }
 

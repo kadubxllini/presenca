@@ -1,4 +1,4 @@
-const CACHE_NAME = 'presenca-v1';
+const CACHE_NAME = 'presenca-v2';
 
 // Arquivos principais do App Shell para armazenar em cache
 const APP_SHELL = [
