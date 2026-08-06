@@ -61,6 +61,25 @@ function calcHours(startStr, endStr) {
   return Math.max(0.5, Math.round((diff / 60) * 10) / 10);
 }
 
+function addMinutesToTime(timeStr, minsToAdd) {
+  if (!timeStr) return '20:40';
+  const [h, m] = timeStr.split(':').map(Number);
+  let totalMinutes = (h * 60 + m + minsToAdd) % (24 * 60);
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+  const newH = Math.floor(totalMinutes / 60);
+  const newM = totalMinutes % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+}
+
+function getTimeDurationMinutes(startStr, endStr) {
+  if (!startStr || !endStr) return 120;
+  const [sH, sM] = startStr.split(':').map(Number);
+  const [eH, eM] = endStr.split(':').map(Number);
+  let diff = (eH * 60 + eM) - (sH * 60 + sM);
+  if (diff <= 0) diff += 24 * 60;
+  return diff;
+}
+
 function formatAulasBadge(h) {
   const aulas = Math.round(h / 2);
   if (h % 2 === 0 && aulas > 0) {
@@ -137,9 +156,20 @@ function dayPicker(s) {
       const dayId = +addBtn.dataset.addSlot;
       const list = $(`#slotsList-${dayId}`);
       if (list) {
+        const rows = list.querySelectorAll('.slot-row');
+        let newStart = '20:40';
+        let newEnd = '22:40';
+        if (rows.length > 0) {
+          const lastRow = rows[rows.length - 1];
+          const lastStart = lastRow.querySelector('.slot-start')?.value || '18:30';
+          const lastEnd = lastRow.querySelector('.slot-end')?.value || '20:30';
+          const dur = getTimeDurationMinutes(lastStart, lastEnd);
+          newStart = addMinutesToTime(lastEnd, 10);
+          newEnd = addMinutesToTime(newStart, dur);
+        }
         const count = list.children.length;
         const newRow = document.createElement('div');
-        newRow.innerHTML = renderSlotRow(dayId, count, '17:00', '19:00');
+        newRow.innerHTML = renderSlotRow(dayId, count, newStart, newEnd);
         list.append(newRow.firstElementChild);
         updateDayTotal(dayId);
       }
