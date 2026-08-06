@@ -16,6 +16,12 @@ let signup = false;
 
 const hours = n => `${n} ${n === 1 ? 'hora' : 'horas'}`;
 
+function formatPct(n) {
+  if (!n || isNaN(n)) return '0';
+  const truncated = Math.floor((n + 1e-9) * 100) / 100;
+  return truncated % 1 === 0 ? String(truncated) : parseFloat(truncated.toFixed(2)).toString();
+}
+
 function totals(s) {
   const total = +s.total_hours;
   return {
@@ -311,11 +317,11 @@ function render() {
 
   $('#alertSection').hidden = !alerts.length;
   $('#alertsList').innerHTML = alerts.map(({ s, t, pct }) => {
-    const roundedPct = Math.round(pct);
+    const formattedPct = formatPct(pct);
     if (t.absent >= t.allowed) {
       return `<div class="alert"><strong>${s.name}:</strong> você atingiu o limite máximo de faltas (${hours(t.absent)} de ${hours(t.allowed)} permitidas).</div>`;
     }
-    return `<div class="alert"><strong>${s.name}:</strong> você atingiu ${roundedPct}% de faltas na matéria (${hours(t.absent)} de ${hours(t.total)}). Faltam somente ${hours(t.allowed - t.absent)} para o limite máximo (${hours(t.allowed)}).</div>`;
+    return `<div class="alert"><strong>${s.name}:</strong> você atingiu ${formattedPct}% de faltas na matéria (${hours(t.absent)} de ${hours(t.total)}). Faltam somente ${hours(t.allowed - t.absent)} para o limite máximo (${hours(t.allowed)}).</div>`;
   }).join('');
 
   renderCalendar();
@@ -353,7 +359,7 @@ function render() {
     }
     const currentAbsencePct = t.total > 0 ? (t.absent / t.total) * 100 : 0;
     if (pieText) {
-      pieText.textContent = `${Math.round(currentAbsencePct)}%`;
+      pieText.textContent = `${formatPct(currentAbsencePct)}%`;
       pieText.style.color = p >= 100 ? 'var(--danger)' : 'var(--ink)';
     }
 
