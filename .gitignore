@@ -13,15 +13,10 @@ yarn-error.log*
 .env.production
 .env.development
 
-# Banco de dados local SQLite
-database/*.db*
-database/*.sqlite*
-*.db*
-*.db-journal
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
+# Banco de dados SQLite para deploy
+!database/banco.db
+!database/banco.db-wal
+!database/banco.db-shm
 
 # Arquivos de sistema e IDEs
 .DS_Store
