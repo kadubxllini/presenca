@@ -18,8 +18,8 @@ const hours = n => `${n} ${n === 1 ? 'hora' : 'horas'}`;
 
 function formatPct(n) {
   if (!n || isNaN(n)) return '0';
-  const truncated = Math.floor((n + 1e-9) * 100) / 100;
-  return truncated % 1 === 0 ? String(truncated) : parseFloat(truncated.toFixed(2)).toString();
+  const rounded = Math.round(n * 100) / 100;
+  return rounded % 1 === 0 ? String(rounded) : parseFloat(rounded.toFixed(2)).toString();
 }
 
 function totals(s) {
