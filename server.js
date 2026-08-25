@@ -64,9 +64,13 @@ db.serialize(() => {
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
+      settings TEXT DEFAULT '{"absence_step_hours": 2, "display_mode": "aulas"}',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Adiciona a coluna settings caso a tabela já tenha sido criada anteriormente
+  db.run(`ALTER TABLE users ADD COLUMN settings TEXT DEFAULT '{"absence_step_hours": 2, "display_mode": "aulas"}';`, () => {});
 
   db.run(`
     CREATE TABLE IF NOT EXISTS subjects (
@@ -122,15 +126,16 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Este e-mail já está cadastrado. Faça login.' });
     }
 
+    const defaultSettings = { absence_step_hours: 2, display_mode: 'aulas' };
     const id = crypto.randomUUID();
     const hashedPassword = hashPassword(password);
 
     await dbRun(
-      'INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)',
-      [id, finalName, cleanEmail, hashedPassword]
+      'INSERT INTO users (id, name, email, password, settings) VALUES (?, ?, ?, ?, ?)',
+      [id, finalName, cleanEmail, hashedPassword, JSON.stringify(defaultSettings)]
     );
 
-    res.status(201).json({ id, name: finalName, email: cleanEmail });
+    res.status(201).json({ id, name: finalName, email: cleanEmail, settings: defaultSettings });
   } catch (err) {
     console.error('Erro no registro:', err);
     res.status(500).json({ error: 'Erro ao cadastrar usuário no servidor.' });
@@ -146,16 +151,63 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const user = await dbGet('SELECT id, name, email, password FROM users WHERE email = ?', [cleanEmail]);
+    const user = await dbGet('SELECT id, name, email, password, settings FROM users WHERE email = ?', [cleanEmail]);
 
     if (!user || !verifyPassword(password, user.password)) {
       return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
     }
 
-    res.json({ id: user.id, name: user.name, email: user.email });
+    let parsedSettings = { absence_step_hours: 2, display_mode: 'aulas' };
+    try {
+      if (user.settings) {
+        parsedSettings = { ...parsedSettings, ...JSON.parse(user.settings) };
+      }
+    } catch (e) {}
+
+    res.json({ id: user.id, name: user.name, email: user.email, settings: parsedSettings });
   } catch (err) {
     console.error('Erro no login:', err);
     res.status(500).json({ error: 'Erro ao realizar login no servidor.' });
+  }
+});
+
+// 2.1 Atualizar Perfil e Configurações
+app.put('/api/user/profile', async (req, res) => {
+  try {
+    const { id, name, settings } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'ID do usuário é obrigatório.' });
+    }
+
+    const existingUser = await dbGet('SELECT id, name, email, settings FROM users WHERE id = ?', [id]);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    let currentSettings = { absence_step_hours: 2, display_mode: 'aulas' };
+    try {
+      if (existingUser.settings) {
+        currentSettings = { ...currentSettings, ...JSON.parse(existingUser.settings) };
+      }
+    } catch (e) {}
+
+    const newSettings = settings ? { ...currentSettings, ...settings } : currentSettings;
+    const finalName = (name && typeof name === 'string' && name.trim()) ? name.trim().slice(0, 50) : existingUser.name;
+
+    await dbRun(
+      'UPDATE users SET name = ?, settings = ? WHERE id = ?',
+      [finalName, JSON.stringify(newSettings), id]
+    );
+
+    res.json({
+      id: existingUser.id,
+      name: finalName,
+      email: existingUser.email,
+      settings: newSettings
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar perfil:', err);
+    res.status(500).json({ error: 'Erro ao salvar configurações do perfil.' });
   }
 });
 

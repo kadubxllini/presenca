@@ -16,6 +16,30 @@ let signup = false;
 
 const hours = n => `${n} ${n === 1 ? 'hora' : 'horas'}`;
 
+function getUserSettings() {
+  return {
+    absence_step_hours: Number(user?.settings?.absence_step_hours) || 2,
+    display_mode: user?.settings?.display_mode || 'aulas'
+  };
+}
+
+function formatAbsenceDisplay(h) {
+  if (h === undefined || h === null || isNaN(h)) h = 0;
+  const settings = getUserSettings();
+  const step = settings.absence_step_hours;
+  const mode = settings.display_mode;
+
+  if (mode === 'aulas' || step === 2) {
+    const aulas = h / 2;
+    const formattedAulas = aulas % 1 === 0 ? String(aulas) : parseFloat(aulas.toFixed(1)).toString().replace('.', ',');
+    const aulaText = (aulas === 1) ? '1 aula' : `${formattedAulas} aulas`;
+    const horaText = (h === 1) ? '1 hora' : `${h} horas`;
+    return `${aulaText} (${horaText})`;
+  }
+
+  return `${h} ${h === 1 ? 'hora' : 'horas'}`;
+}
+
 function formatPct(n) {
   if (!n || isNaN(n)) return '0';
   const rounded = Math.round(n * 100) / 100;
@@ -221,6 +245,15 @@ function subjectModal(s) {
   $('#modalEyebrow').textContent = s ? 'EDITAR MATÉRIA' : 'NOVA MATÉRIA';
   $('#modalTitle').textContent = s ? 'Editar disciplina' : 'Adicionar disciplina';
   $('#subjectSubmitButton').textContent = s ? 'Salvar alterações' : 'Adicionar matéria';
+
+  const currentStep = getUserSettings().absence_step_hours;
+  const helper = $('#subjectHelperText');
+  if (helper) {
+    helper.textContent = currentStep === 2
+      ? 'Cada clique em registrar falta adiciona 1 aula (2 horas). O limite é calculado pela carga horária total.'
+      : 'Cada clique em registrar falta adiciona 1 hora. O limite é calculado pela carga horária total.';
+  }
+
   const delBtn = $('#deleteSubjectInModal');
   delBtn.hidden = !s;
   delBtn.onclick = async () => {
@@ -323,7 +356,8 @@ function render() {
   if (shell) shell.hidden = false;
   $('#userModal').close();
   $('#greetingName').textContent = profile.name;
-  $('#profileCard').innerHTML = `<span class="avatar">${(profile.name[0] || 'U').toUpperCase()}</span><div><strong>${profile.name}</strong><small>${user.email}</small></div>`;
+  $('#profileCard').innerHTML = `<span class="avatar">${(profile.name[0] || 'U').toUpperCase()}</span><div><strong>${profile.name}</strong><small>${user.email}</small></div><span class="profile-gear" title="Configurações do perfil">⚙️</span>`;
+  $('#profileCard').onclick = () => openProfileModal();
 
   const all = subjects.map(totals);
   const absent = all.reduce((n, x) => n + x.absent, 0);
@@ -334,8 +368,10 @@ function render() {
     return t.total > 0 && (t.absent / t.total) * 100 >= 15;
   }).length;
 
+  const currentStep = getUserSettings().absence_step_hours;
+
   $('#statsGrid').innerHTML = [
-    ['◷', 'Horas de falta registradas', hours(absent)],
+    ['◷', 'Faltas registradas', formatAbsenceDisplay(absent)],
     ['♡', 'Matérias em atenção (≥15%)', `${risk} <small>de ${subjects.length}</small>`]
   ].map(x => `<article class="stat-card"><span class="stat-icon">${x[0]}</span><p>${x[1]}</p><strong>${x[2]}</strong></article>`).join('');
 
@@ -349,9 +385,9 @@ function render() {
   $('#alertsList').innerHTML = alerts.map(({ s, t, pct }) => {
     const formattedPct = formatPct(pct);
     if (t.absent >= t.allowed) {
-      return `<div class="alert"><strong>${s.name}:</strong> você atingiu o limite máximo de faltas (${hours(t.absent)} de ${hours(t.allowed)} permitidas).</div>`;
+      return `<div class="alert"><strong>${s.name}:</strong> você atingiu o limite máximo de faltas (${formatAbsenceDisplay(t.absent)} de ${formatAbsenceDisplay(t.allowed)} permitidas).</div>`;
     }
-    return `<div class="alert"><strong>${s.name}:</strong> você atingiu ${formattedPct}% de faltas na matéria (${hours(t.absent)} de ${hours(t.total)}). Faltam somente ${hours(t.allowed - t.absent)} para o limite máximo (${hours(t.allowed)}).</div>`;
+    return `<div class="alert"><strong>${s.name}:</strong> você atingiu ${formattedPct}% de faltas na matéria (${formatAbsenceDisplay(t.absent)} de ${hours(t.total)}). Faltam somente ${formatAbsenceDisplay(t.allowed - t.absent)} para o limite máximo (${formatAbsenceDisplay(t.allowed)}).</div>`;
   }).join('');
 
   renderCalendar();
@@ -372,7 +408,7 @@ function render() {
       const timesStr = slots.map(sl => `${sl.start}-${sl.end}`).join(', ');
       return `${dayObj?.short || ''}${timesStr ? ` (${timesStr})` : ''}`;
     }).join(' · ')}  •  ${t.total}h de carga horária`;
-    c.querySelector('.absence-ratio').textContent = `${hours(t.absent)} de ${hours(t.allowed)}`;
+    c.querySelector('.absence-ratio').textContent = `${formatAbsenceDisplay(t.absent)} de ${formatAbsenceDisplay(t.allowed)}`;
     const bar = c.querySelector('.progress-bar');
     const color = `hsl(${Math.max(0, 145 - p * 1.45)} 68% 47%)`;
     bar.style.width = `${p}%`;
@@ -393,9 +429,9 @@ function render() {
       pieText.style.color = p >= 100 ? 'var(--danger)' : 'var(--ink)';
     }
 
-    c.querySelector('.remaining-text').textContent = t.absent >= t.allowed ? 'Limite de faltas atingido.' : `Você ainda pode faltar ${hours(t.allowed - t.absent)}.`;
-    c.querySelector('.add-absence').textContent = '+ Registrar 1h de falta';
-    c.querySelector('.remove-absence').textContent = '− Remover 1h';
+    c.querySelector('.remaining-text').textContent = t.absent >= t.allowed ? 'Limite de faltas atingido.' : `Você ainda pode faltar ${formatAbsenceDisplay(t.allowed - t.absent)}.`;
+    c.querySelector('.add-absence').textContent = currentStep === 2 ? '+ Registrar 1 aula (2h)' : '+ Registrar 1h de falta';
+    c.querySelector('.remove-absence').textContent = currentStep === 2 ? '− Remover 1 aula (2h)' : '− Remover 1h';
     c.querySelector('.add-absence').onclick = () => change(s, 1);
     c.querySelector('.remove-absence').onclick = () => change(s, -1);
     c.querySelector('.more-button').onclick = () => subjectModal(s);
@@ -403,6 +439,84 @@ function render() {
   });
   $('#emptyState').hidden = !!subjects.length;
 }
+
+function openProfileModal() {
+  if (!user) return;
+  $('#profileNameInput').value = user.name || profile.name || '';
+  $('#profileEmailInput').value = user.email || '';
+  const settings = getUserSettings();
+  if (settings.absence_step_hours === 1) {
+    $('#stepOption1').checked = true;
+  } else {
+    $('#stepOption2').checked = true;
+  }
+  const msg = $('#profileMessage');
+  if (msg) {
+    msg.textContent = '';
+    msg.classList.remove('success');
+  }
+  $('#profileModal').showModal();
+}
+
+$('#profileForm').onsubmit = async e => {
+  e.preventDefault();
+  const newName = $('#profileNameInput').value.trim();
+  const selectedStep = $('#stepOption1').checked ? 1 : 2;
+  const newSettings = {
+    absence_step_hours: selectedStep,
+    display_mode: selectedStep === 2 ? 'aulas' : 'horas'
+  };
+
+  $('#saveProfileBtn').disabled = true;
+  const msg = $('#profileMessage');
+  if (msg) {
+    msg.textContent = 'Salvando preferências...';
+    msg.classList.remove('success');
+  }
+
+  try {
+    const res = await fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: user.id,
+        name: newName,
+        settings: newSettings
+      })
+    });
+
+    const data = await res.json();
+    $('#saveProfileBtn').disabled = false;
+
+    if (!res.ok) {
+      if (msg) msg.textContent = data.error || 'Erro ao salvar preferências.';
+      return;
+    }
+
+    user.name = data.name;
+    user.settings = data.settings;
+    profile.name = data.name;
+    saveLocalUser(user);
+
+    if (msg) {
+      msg.textContent = 'Configurações salvas com sucesso!';
+      msg.classList.add('success');
+    }
+
+    render();
+    setTimeout(() => {
+      $('#profileModal').close();
+    }, 450);
+  } catch (err) {
+    $('#saveProfileBtn').disabled = false;
+    user.name = newName;
+    user.settings = newSettings;
+    profile.name = newName;
+    saveLocalUser(user);
+    render();
+    $('#profileModal').close();
+  }
+};
 
 // Funções de Persistência Local (Fallback para Render & Offline)
 function saveLocalUser(u) {
@@ -454,8 +568,10 @@ async function load() {
   render();
 }
 
-async function change(s, n) {
-  const v = Math.max(0, +s.absence_count + n);
+async function change(s, dir) {
+  const step = getUserSettings().absence_step_hours;
+  const delta = dir * step;
+  const v = Math.max(0, +s.absence_count + delta);
   s.absence_count = v;
   saveLocalSubjects(user.id, subjects);
   render();

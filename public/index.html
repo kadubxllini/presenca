@@ -119,6 +119,59 @@
     </form>
   </dialog>
 
+  <dialog id="profileModal" class="modal">
+    <form id="profileForm">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">CONFIGURAÇÕES</p>
+          <h2>Seu Perfil & Preferências</h2>
+        </div>
+        <button class="icon-button" type="button" data-close="profileModal" aria-label="Fechar">×</button>
+      </div>
+
+      <label>Seu Nome
+        <input id="profileNameInput" maxlength="50" placeholder="Seu nome" required autocomplete="name" />
+      </label>
+
+      <label>E-mail
+        <input id="profileEmailInput" type="email" readonly disabled class="input-readonly" />
+      </label>
+
+      <fieldset class="settings-fieldset">
+        <legend>Como você prefere contar as faltas?</legend>
+        <div class="settings-options">
+          <label class="setting-option-card">
+            <input type="radio" name="absenceStep" value="2" id="stepOption2" checked />
+            <div class="setting-option-content">
+              <div class="setting-option-header">
+                <strong>🎓 1 Aula (2 horas por clique)</strong>
+                <span class="setting-badge">Padrão</span>
+              </div>
+              <p>Cada clique adiciona ou remove 2 horas (1 aula). O visual mostra <strong>"1 aula (2 horas)"</strong>, facilitando o controle acadêmico.</p>
+            </div>
+          </label>
+
+          <label class="setting-option-card">
+            <input type="radio" name="absenceStep" value="1" id="stepOption1" />
+            <div class="setting-option-content">
+              <div class="setting-option-header">
+                <strong>⏱️ 1 Hora (1 hora por clique)</strong>
+              </div>
+              <p>Cada clique conta 1 hora individual de falta. Ideal para disciplinas com controle direto de horas.</p>
+            </div>
+          </label>
+        </div>
+      </fieldset>
+
+      <p id="profileMessage" class="auth-message" aria-live="polite"></p>
+
+      <div class="modal-footer">
+        <button class="button secondary" type="button" data-close="profileModal">Cancelar</button>
+        <button class="button primary" id="saveProfileBtn" type="submit">Salvar alterações</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="subjectModal" class="modal">
     <form id="subjectForm">
       <div class="modal-header">
@@ -139,8 +192,7 @@
         <legend>Em quais dias você tem aula?</legend>
         <div class="days-picker" id="daysPicker"></div>
       </fieldset>
-      <p class="helper">Cada clique em registrar falta corresponde a 1 hora. O limite é calculado pela carga horária
-        total da matéria.</p>
+      <p class="helper" id="subjectHelperText">O limite de faltas é calculado pela carga horária total da matéria.</p>
       <div class="modal-footer">
         <button class="button danger-text" id="deleteSubjectInModal" type="button" hidden>Excluir matéria</button>
         <button class="button primary" id="subjectSubmitButton" type="submit">Adicionar matéria</button>
