@@ -1,7 +1,7 @@
 {
   "name": "teste",
   "version": "1.0.0",
-  "description": "Aplicação web para acompanhamento e controle de presença e faltas em disciplinas acadêmicas. Funciona 100% offline e localmente.",
+  "description": "Aplica\u00e7\u00e3o web para acompanhamento e controle de presen\u00e7a e faltas em disciplinas acad\u00eamicas. Funciona 100% offline e localmente.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -15,6 +15,6 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^6.0.1"
   }
 }

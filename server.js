@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.set('trust proxy', 'loopback');
 app.use(express.json({ limit: '10kb' })); // Limita o tamanho do JSON recebido para evitar DoS
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -104,6 +104,61 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
   });
 });
 
+
+// Authenticated sessions: token hashes only; user IDs are not credentials.
+db.serialize(() => db.run(`CREATE TABLE IF NOT EXISTS security_sessions (
+ token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL
+)`));
+const tokenHash = token => crypto.createHash('sha256').update(token).digest('hex');
+const currentToken = req => (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('presenca_auth='))?.slice(14) || '';
+async function createSession(req, res, userId) {
+ const previous = currentToken(req);
+ if (/^[a-f0-9]{64}$/.test(previous)) await dbRun('DELETE FROM security_sessions WHERE token_hash = ?', [tokenHash(previous)]);
+ const token = crypto.randomBytes(32).toString('hex');
+ await dbRun('DELETE FROM security_sessions WHERE expires_at < ?', [Date.now()]);
+ await dbRun('INSERT INTO security_sessions VALUES (?, ?, ?)', [tokenHash(token), userId, Date.now() + 7 * 86400000]);
+ res.cookie('presenca_auth', token, { httpOnly: true, sameSite: 'strict', secure: req.secure, maxAge: 7 * 86400000, path: '/' });
+}
+const authAttempts = new Map();
+app.use('/api', async (req, res, next) => {
+ res.setHeader('Cache-Control', 'no-store');
+ if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers.origin) {
+  try { if (new URL(req.headers.origin).host !== req.get('host')) return res.status(403).json({ error: 'Origem não autorizada.' }); }
+  catch { return res.status(403).json({ error: 'Origem inválida.' }); }
+ }
+ if (['/auth/login', '/auth/register'].includes(req.path)) {
+  const now = Date.now(), key = req.ip;
+  for (const [ip, value] of authAttempts) if (value.until < now) authAttempts.delete(ip);
+  const value = authAttempts.get(key) || { count: 0, until: now + 60000 };
+  value.count++; authAttempts.set(key, value);
+  if (value.count > 20) return res.status(429).json({ error: 'Tente novamente em um minuto.' });
+  return next();
+ }
+ try {
+  const token = currentToken(req);
+  if (!/^[a-f0-9]{64}$/.test(token)) return res.status(401).json({ error: 'Faça login novamente.' });
+  const session = await dbGet('SELECT user_id FROM security_sessions WHERE token_hash = ? AND expires_at > ?', [tokenHash(token), Date.now()]);
+  if (!session) return res.status(401).json({ error: 'Sessão expirada.' });
+  req.sessionUserId = session.user_id;
+  if (req.path === '/auth/logout') {
+   await dbRun('DELETE FROM security_sessions WHERE token_hash = ?', [tokenHash(token)]);
+   res.clearCookie('presenca_auth', { path: '/' }); return res.json({ success: true });
+  }
+  if (req.path === '/user/profile' && req.body?.id !== session.user_id) return res.status(403).json({ error: 'Acesso negado.' });
+  const parts = req.path.split('/').filter(Boolean);
+  if (parts[0] === 'subjects') {
+   if (req.method === 'GET' && parts[1] !== session.user_id) return res.status(403).json({ error: 'Acesso negado.' });
+   if (req.method === 'POST' && !parts[1] && req.body?.user_id !== session.user_id) return res.status(403).json({ error: 'Acesso negado.' });
+   const subjectId = req.method === 'GET' ? null : (parts[1] || req.body?.id);
+   if (subjectId) {
+    const subject = await dbGet('SELECT user_id FROM subjects WHERE id = ?', [subjectId]);
+    if (subject && subject.user_id !== session.user_id) return res.status(403).json({ error: 'Acesso negado.' });
+   }
+  }
+  next();
+ } catch { res.status(500).json({ error: 'Não foi possível validar a sessão.' }); }
+});
+
 // --- ROTAS DA API ---
 
 // 1. Cadastro
@@ -135,6 +190,7 @@ app.post('/api/auth/register', async (req, res) => {
       [id, finalName, cleanEmail, hashedPassword, JSON.stringify(defaultSettings)]
     );
 
+    await createSession(req, res, id);
     res.status(201).json({ id, name: finalName, email: cleanEmail, settings: defaultSettings });
   } catch (err) {
     console.error('Erro no registro:', err);
@@ -164,6 +220,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
     } catch (e) {}
 
+    await createSession(req, res, user.id);
     res.json({ id: user.id, name: user.name, email: user.email, settings: parsedSettings });
   } catch (err) {
     console.error('Erro no login:', err);

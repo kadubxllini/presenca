@@ -554,6 +554,10 @@ async function load() {
   // Tenta buscar matérias no servidor
   try {
     const res = await fetch(`/api/subjects/${user.id}`);
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('presenca_session'); sessionStorage.removeItem('presenca_session');
+      user = null; profile = null; subjects = []; render(); message('Faça login novamente.'); return;
+    }
     if (res.ok) {
       subjects = await res.json();
       saveLocalSubjects(user.id, subjects);
@@ -632,6 +636,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
 document.querySelectorAll('[data-close]').forEach(x => x.onclick = () => $('#' + x.dataset.close).close());
 
 $('#switchUserButton').onclick = () => {
+  fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
   localStorage.removeItem('presenca_session');
   sessionStorage.removeItem('presenca_session');
   user = null;
