@@ -1,5 +1,10 @@
 # Sistema de Controle de Faltas
 
+![Painel do Controle de Faltas](docs/images/painel.png)
+
+Captura da aplicação local com estudante e disciplinas fictícios.
+
+
 Projeto simples pra controlar as faltas das matérias da faculdade.
 
 ## Como rodar
